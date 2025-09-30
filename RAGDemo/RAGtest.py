@@ -1,6 +1,4 @@
-import os
-import requests
-import sys
+import os, requests, sys
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
@@ -40,7 +38,7 @@ class TAMULLM(LLM):
     def _llm_type(self):
         return "tamu-llm"
 
-# ========== Build Knowledge Base ==========
+# Vector basis
 def build_vectorstore(pdf_paths):
     docs = []
     for path in pdf_paths:
@@ -58,16 +56,18 @@ def build_vectorstore(pdf_paths):
     # Local embeddings
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
 
-    # Store in FAISS
+    # create FAISS
     vectorstore = FAISS.from_documents(splits, embeddings)
     return vectorstore
 
-# ========== Custom Prompt for Citations ==========
-template = """You are a helpful lab assistant answering questions about lab manuals.
+# prompt
+template = """You are a helpful lab assistant answering questions about labs.
 
-Based on the context below, answer the question. Be specific and include relevant details from the manuals.
+Based on the context below, answer the question. Be specific and include relevant details from the provided documents.
 
 If you find relevant information, provide a clear answer and cite your sources using the format (ManualName.pdf, page N).
+
+If the information is common & could be helpful in the context of the documents, include that information.
 
 If the information is truly not in the context, then say you don't have that information.
 
@@ -79,7 +79,7 @@ Question: {question}
 Answer (include citations):"""
 prompt = PromptTemplate(template=template, input_variables=["context", "question"])
 
-# ========== Query the System ==========
+# Query system
 def make_qa_chain(vectorstore):
     llm = TAMULLM()
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -89,22 +89,22 @@ def make_qa_chain(vectorstore):
         retriever=retriever,
         chain_type="stuff",
         chain_type_kwargs={"prompt": prompt},
-        return_source_documents=True,  # gives back chunks for citation
+        return_source_documents=True,
     )
     return qa
 
-# ========== Example Usage ==========
+# demo
 if __name__ == "__main__":
     manuals = ["214_Manuals/Lab1.pdf", "214_Manuals/Lab3.pdf"] 
     vectorstore = build_vectorstore(manuals)
     qa = make_qa_chain(vectorstore)
 
-    query = "What are the relevant equations for Lab 2?"
+    query = "What are the relevant equations for Lab 3?"
     result = qa.invoke(query)
 
-    print("\n=== Answer ===")
+    print("\n[Answer]")
     print(result["result"])
 
-    print("\n=== Sources Used ===")
+    print("\n[Sources Used]")
     for doc in result["source_documents"]:
         print(f"- {doc.metadata['manual']} (page {doc.metadata.get('page', '?')})")
