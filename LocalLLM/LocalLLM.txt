@@ -1,0 +1,3 @@
+Test code for LLM will still feed off of API, however the final release for the Assistant will feature a local LLM.
+
+Based on the following project: https://github.com/amscotti/local-LLM-with-RAG
