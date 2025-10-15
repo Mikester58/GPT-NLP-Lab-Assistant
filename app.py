@@ -8,18 +8,14 @@ import sys
 from langchain_ollama import ChatOllama
 
 #pull funcs from local files
-from model import CheckIfModelRuns
-from database_bridge import LoadToDatabase
-from llm import getChatHistory
-
-if __name__ == "__main__":
-    arg = parse()
-    main(arg.model, arg.embedding_model, arg.path)
+from model import PullModel
+from database_bridge import PullDocuments
+from llm import GetChatHistory
 
 def main(model_name: str, embedding_model: str, doc_path: str) -> None:
-    db = LoadToDatabase(embedding_model, doc_path)
+    db = PullDocuments(embedding_model, doc_path)
     llm = ChatOllama(model=model_name)
-    chat = getChatHistory(llm, LoadToDatabase)
+    chat = GetChatHistory(llm, PullModel)
 
     while True:
         try:
@@ -35,3 +31,7 @@ def parse() -> argparse.Namespace:
     parseHolder = argparse.ArgumentParser()
 
     return parseHolder
+
+if __name__ == "__main__":
+    arg = parse()
+    main(arg.model, arg.embedding_model, arg.path)
