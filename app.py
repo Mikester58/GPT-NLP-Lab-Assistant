@@ -11,26 +11,61 @@ from langchain_ollama import ChatOllama
 from model import PullModel
 from database_bridge import PullDocuments
 from llm import GetChatHistory
+from lightrag import LightRAG
 
 def main(model_name: str, embedding_model: str, doc_path: str) -> None:
-    db = PullDocuments(embedding_model, doc_path)
+    try:
+        PullModel(model_name)
+        PullModel(embedding_model)
+    except Exception as e:
+        print(f"couldnt pull model: {e}")
+        sys.exit(1)
+    
+    try:
+        db = PullDocuments(embedding_model, doc_path)
+    except FileNotFoundError as e:
+        print(e)
+        sys.exit(1)
+    
     llm = ChatOllama(model=model_name)
-    chat = GetChatHistory(llm, PullModel)
+    chat = GetChatHistory(llm, db)
+
+    lightrag = LightRAG(llm=llm, db=db, retriever_k=8)
 
     while True:
         try:
             user_input = input("\n\nPlease ask a question relating to a Lab in TAMU's ECEN 214 Lab or press 'q' to end: ").strip()
             if user_input.lower == "q":
                 break
+            if user_input.lower().startswith("rag:"):
+                q = user_input[len("rag:"):].strip()
+                out = lightrag.generate(q)
+                print("\n=== LightRAG ANSWER ===\n")
+                print(out["answer"])
+                print("\n--- Evidence / overlap scores ---")
+                for e in out["evidence"]:
+                    print(e)
+                print("\n--- Sources used ---")
+                for s in out["docs_used"]:
+                    print(s)
             else:
                 chat(user_input)
         except KeyboardInterrupt:
             break
 
 def parse() -> argparse.Namespace:
-    parseHolder = argparse.ArgumentParser()
+    parseHolder = argparse.ArgumentParser(description="Run LLM using Ollama & LightRAG.")
+    parseHolder.add_argument(
+        '-m', '--model', default="mistral", help="The name of the LLM to use (Ollama model)"
+    )
+    parseHolder.add_argument(
+        '-e', '--embedding_model', default="nomic-embed-text", help="name of embedding model (Ollama embeddings)."
+    )
+    parseHolder.add_argument(
+        '-p', '--path', default="Docs", help="Path to the directory containing documents to be loaded."
+    )
 
-    return parseHolder
+    return parseHolder.parse_args()
 
 if __name__ == "__main__":
     arg = parse()

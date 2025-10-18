@@ -5,7 +5,7 @@ later for feedback/record keeping.
 """
 
 import os
-from typing import List
+from typing import List, Tuple, Optional
 from langchain_community.document_loaders import 
 
 
