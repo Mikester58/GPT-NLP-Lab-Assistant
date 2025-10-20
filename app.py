@@ -1,6 +1,8 @@
 """
 Central project application, can be ran locally using inputs from console or
 on the AURA with inputs from Voice to Text module.
+Code for this application based on LocalLLM with RAG project:
+https://github.com/amscotti/local-LLM-with-RAG?tab=readme-ov-file
 """
 
 import argparse
