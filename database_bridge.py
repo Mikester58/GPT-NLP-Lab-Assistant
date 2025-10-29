@@ -11,16 +11,14 @@ later for feedback/record keeping.
 """
 
 import os
-import json
-from typing import List, Optional, Union, Dict, Any
-from datetime import datetime
-from uuid import uuid4
+from typing import List
+from config import DEFAULT_DOC_PROMPT
 
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader, UnstructuredWordDocumentLoader
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters.character import RecursiveCharacterTextSplitter
 
 SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 PERSISTENT_DIRECTORY = os.path.join("storage", "chroma")
@@ -38,6 +36,16 @@ def CombineDocuments(docs: List[Document], seperator: str = "\n\n") -> str:
             src = None
             pieces.append(content)
     return seperator.join(pieces)
+
+def CombineDocuments(docs: List[Document], document_prompt=DEFAULT_DOC_PROMPT, document_separator="\n\n") -> str:
+    """
+    Formats and concatenates a list of documents into a single string for LLM input.
+    """
+    formatted = [document_prompt.format(source=doc.metadata.get("source", "Unknown"),
+                                        page=doc.metadata.get("page", "?"),
+                                        page_content=doc.page_content)
+                 for doc in docs]
+    return document_separator.join(formatted)
     
 def PullDocuments(documentPath: str) -> List[Document]:
     #Load from documentPath with support for various file types.
@@ -89,8 +97,8 @@ def PushDocuments(model_name: str, documentPath: str, reload: bool = False) -> C
             return db
         
 
-#def PushSession():
+#def PushSession(session_name: str, history: List[Dict[str, Any]]) -> None:
 
 
-#def PullSession():
+#def PullSession(session_name: str) -> Dict[str, Any]:
 

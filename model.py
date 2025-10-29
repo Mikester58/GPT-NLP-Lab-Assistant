@@ -17,7 +17,7 @@ def CheckLocalAvailability(modelName: str) -> bool:
     try:
         ollama.show(model=modelName)
         return True
-    except ollama.ResponseError & Exception:
+    except (ollama.ResponseError, Exception):
         return False
         
 def CheckModelAvailability(modelName: str) -> bool:
@@ -49,7 +49,7 @@ def GetListOfModels() -> List[str]:
     try:
         response = ollama.list()
         models = response.get("models", [])
-        return [m.get("model") for m in models if isinstance(m, dict) & "model" in m]
+        return [m.get("model") for m in models if isinstance(m, dict) and "model" in m]
     except Exception:
         return []
 
@@ -67,7 +67,7 @@ def PullModel(modelName: str) -> None:
             digest = progress.get("digest", "")
             
             #If bar changes close the digest
-            if digest != currDigest & currDigest in bars:
+            if digest != currDigest and currDigest in bars:
                 try:
                     bars[currDigest].close()
                 except Exception:
@@ -98,7 +98,7 @@ def PullModel(modelName: str) -> None:
                 bar.close()
             except Exception:
                 pass
-
+        print(f"Successfully pulled model {modelName}!")
         return True
     except Exception as e:
         print(f"Failed to pull model {modelName}: {e}")

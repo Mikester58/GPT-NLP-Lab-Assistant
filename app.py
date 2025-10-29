@@ -14,6 +14,7 @@ from model import PullModel
 from database_bridge import PullDocuments
 from llm import GetChatHistory
 from lightrag import LightRAG
+from config import DEFAULT_EMBEDDING_MODEL, DEFAULT_MODEL, DEFAULT_DOCS_PATH
 
 def main(model_name: str, embedding_model: str, doc_path: str) -> None:
     try:
@@ -58,13 +59,13 @@ def main(model_name: str, embedding_model: str, doc_path: str) -> None:
 def parse() -> argparse.Namespace:
     parseHolder = argparse.ArgumentParser(description="Run LLM using Ollama & LightRAG.")
     parseHolder.add_argument(
-        '-m', '--model', default="mistral", help="The name of the LLM to use (Ollama model)"
+        '-m', '--model', default=DEFAULT_MODEL, help="The name of the LLM to use (Ollama model)"
     )
     parseHolder.add_argument(
-        '-e', '--embedding_model', default="nomic-embed-text", help="name of embedding model (Ollama embeddings)."
+        '-e', '--embedding_model', default=DEFAULT_EMBEDDING_MODEL, help="name of embedding model (Ollama embeddings)."
     )
     parseHolder.add_argument(
-        '-p', '--path', default="Docs", help="Path to the directory containing documents to be loaded."
+        '-p', '--path', default=DEFAULT_DOCS_PATH, help="Path to the directory containing documents to be loaded."
     )
 
     return parseHolder.parse_args()
