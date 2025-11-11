@@ -24,19 +24,6 @@ SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 PERSISTENT_DIRECTORY = os.path.join("storage", "chroma")
 SESSIONS_DIRECTORY = os.path.join("storage", "sessions")
 
-def CombineDocuments(docs: List[Document], seperator: str = "\n\n") -> str:
-    #Needed for storing our precombine caches
-    pieces = []
-    for doc in docs:
-        content = getattr(doc, "page_content", "")
-        if hasattr(doc, "metadata"):
-            src = doc.metadata.get("source")
-            pieces.append(f"Source: {src}\n{content}")
-        else:
-            src = None
-            pieces.append(content)
-    return seperator.join(pieces)
-
 def CombineDocuments(docs: List[Document], document_prompt=DEFAULT_DOC_PROMPT, document_separator="\n\n") -> str:
     """
     Formats and concatenates a list of documents into a single string for LLM input.

@@ -71,7 +71,7 @@ RETRIEVER_K = 10
 LIGHTRAG_K = 8
 
 #Models Used
-DEFAULT_MODEL = "mistral"
+DEFAULT_MODEL = "mistral" #Use Llama3.2 3B model
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
 
 #Make sure these always align with folders in local/remote DB

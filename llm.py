@@ -23,7 +23,7 @@ from config import ANSWER_PROMPT_TMP, DEFAULT_DOC_PROMPT, RETRIEVER_K
 store: Dict[str, InMemoryChatMessageHistory] = {}
 
 def GetChatHistory(llm, db, session_id: str = "default"):
-
+    
 
 def GetStreamHistory(llm, db, session_id: str = "default"):
 
