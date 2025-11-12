@@ -11,19 +11,20 @@ from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 
 DEFAULT_DOC_PROMPT = PromptTemplate.from_template(template="Source Document: {source}, Page {page}:\n{page_content}")
 
-CONDENSED_PROMPT = ChatPromptTemplate.from_messages
-([("system",
-"""Given the following conversation and a follow-up question, 
-rephrase the follow-up question to be a standalone question that includes 
-relevant context from the chat history. If the question is already standalone, 
-return it as is.
+CONDENSED_PROMPT = ChatPromptTemplate.from_messages([
+    ("system",
+    """Given the following conversation and a follow-up question, 
+    rephrase the follow-up question to be a standalone question that includes 
+    relevant context from the chat history. If the question is already standalone, 
+    return it as is.
 
-Chat History:
-{chat_history}
+    Chat History:
+    {chat_history}
 
-Follow-up Question: {question}
+    Follow-up Question: {question}
 
-Standalone Question:""")])
+    Standalone Question:""")
+    ])
 
 #For standard RAG
 ANSWER_PROMPT_TMP = """You are a helpful AI lab assistant assisting with Lab related questions.
@@ -71,7 +72,7 @@ RETRIEVER_K = 10
 LIGHTRAG_K = 8
 
 #Models Used
-DEFAULT_MODEL = "mistral" #Use Llama3.2 3B model
+DEFAULT_MODEL = "mistral" #Use Llama3.2 3B model per Vishuam, ensure the parameters
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
 
 #Make sure these always align with folders in local/remote DB

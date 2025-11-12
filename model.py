@@ -35,7 +35,7 @@ def CheckModelAvailability(modelName: str) -> bool:
     except Exception:
         pulled = False
     
-    if pulled & CheckLocalAvailability(modelName):
+    if pulled and CheckLocalAvailability(modelName):
         return True
     
     return False

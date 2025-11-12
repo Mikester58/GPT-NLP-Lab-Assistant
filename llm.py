@@ -23,10 +23,70 @@ from config import ANSWER_PROMPT_TMP, DEFAULT_DOC_PROMPT, RETRIEVER_K
 store: Dict[str, InMemoryChatMessageHistory] = {}
 
 def GetChatHistory(llm, db, session_id: str = "default"):
+    retriever = db.as_retriever(search_kwargs={"k": RETRIEVER_K})
     
+    prompt = ChatPromptTemplate.from_messages([("system", ANSWER_PROMPT_TMP), MessagesPlaceholder(variable_name="chat_history"), ("human", "{question}")])
+    
+    #define retrieval
+    def format_docs_with_context(question):
+        docs = retriever.invoke(question)
+        return CombineDocuments(docs, DEFAULT_DOC_PROMPT)
+    
+    chain = RunnablePassthrough.assign(context=lambda x: format_docs_with_context(x["question"])) | prompt | llm | StrOutputParser()
+    
+    #Build message history
+    chain_with_history = RunnableWithMessageHistory(
+        chain,
+        GetSessionHistory,
+        input_messages_key="question",
+        history_messages_key="chat_history"
+    )
+    
+    def chat(user_input: str) -> None:
+        result = chain_with_history.invoke(
+            {"question": user_input},
+            config={"configurable": {"session_id": session_id}}
+        )
+        print(result)
+        
+        #Provide retrieved docs ranked
+        docs = retriever.invoke(user_input)
+        for i, doc in enumerate(docs[:3], 1):  #Show top 3 docs
+            source = doc.metadata.get("source", "Unknown")
+            page = doc.metadata.get("page", "?")
+            print(f"{i}. {source} (Page {page})")
+    return chat
 
 def GetStreamHistory(llm, db, session_id: str = "default"):
-
+    retriever = db.as_retriever(search_kwargs={"k": RETRIEVER_K})
+    
+    #Build prompt w/ chat history
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", ANSWER_PROMPT_TMP),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{question}")
+    ])
+    
+    #build retriever
+    def format_docs_with_context(question):
+        docs = retriever.invoke(question)
+        return CombineDocuments(docs, DEFAULT_DOC_PROMPT)
+    chain = RunnablePassthrough.assign(context=lambda x: format_docs_with_context(x["question"])) | prompt | llm
+    chain_with_history = RunnableWithMessageHistory(chain, GetSessionHistory, input_messages_key="question", history_messages_key="chat_history")
+    
+    def stream_chat(user_input: str) -> str:
+        full_response = ""
+        
+        for chunk in chain_with_history.stream(
+            {"question": user_input},
+            config={"configurable": {"session_id": session_id}}
+        ):
+            content = chunk.content if hasattr(chunk, "content") else str(chunk)
+            full_response += content
+        
+        return full_response
+    
+    return stream_chat
 
 #Helper functions
 

@@ -11,27 +11,31 @@ later for feedback/record keeping.
 """
 
 import os
-from typing import List
-from config import DEFAULT_DOC_PROMPT
+import json
+from typing import List, Optional, Union, Dict, Any
+from datetime import datetime
+from uuid import uuid4
 
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader, UnstructuredWordDocumentLoader
+
 from langchain_core.documents import Document
+from langchain.schema import format_document
 from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_text_splitters.character import RecursiveCharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-PERSISTENT_DIRECTORY = os.path.join("storage", "chroma")
-SESSIONS_DIRECTORY = os.path.join("storage", "sessions")
+from config import DEFAULT_DOC_PROMPT, CHUNK_SIZE, CHUNK_OVERLAP, CHROMA_DIR, SESSIONS_DIR, STORAGE_DIR
+
+SPLITTER = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
 
 def CombineDocuments(docs: List[Document], document_prompt=DEFAULT_DOC_PROMPT, document_separator="\n\n") -> str:
     """
     Formats and concatenates a list of documents into a single string for LLM input.
     """
-    formatted = [document_prompt.format(source=doc.metadata.get("source", "Unknown"),
-                                        page=doc.metadata.get("page", "?"),
-                                        page_content=doc.page_content)
-                 for doc in docs]
+    formatted = [
+        format_document(doc, document_prompt) 
+        for doc in docs
+    ]
     return document_separator.join(formatted)
     
 def PullDocuments(documentPath: str) -> List[Document]:
@@ -56,12 +60,11 @@ def PullDocuments(documentPath: str) -> List[Document]:
 
     return docs
 
-
 def PushDocuments(model_name: str, documentPath: str, reload: bool = False) -> Chroma:
     #Load docs, split them, build embeddings & persist a chroma vectorstore to PERSIST_DIRECTORY.
 
-    os.makedirs("storage", exist_ok=True)
-    os.makedirs(PERSISTENT_DIRECTORY, exist_ok=True)
+    os.makedirs(STORAGE_DIR, exist_ok=True)
+    os.makedirs(CHROMA_DIR, exist_ok=True)
 
     if reload:
         print("Reload requested")
@@ -70,22 +73,70 @@ def PushDocuments(model_name: str, documentPath: str, reload: bool = False) -> C
         docs = SPLITTER.split_documents(rawDocs)
         print("Building embeddings...")
 
-        db = Chroma.from_documents(documents=docs, embedding=OllamaEmbeddings(model=model_name), persist_directory=PERSISTENT_DIRECTORY)
+        db = Chroma.from_documents(documents=docs, embedding=OllamaEmbeddings(model=model_name), persist_directory=CHROMA_DIR)
         return db
     else: #either create a persist or return the chroma instance
-        if os.path.isdir(PERSISTENT_DIRECTORY) & os.listdir(PERSISTENT_DIRECTORY):
-            print(f"Using existing persisted Chroma at {PERSISTENT_DIRECTORY}")
-            return Chroma(embedding_function=OllamaEmbeddings(model=model_name), persist_directory=PERSISTENT_DIRECTORY)
+        if os.path.isdir(CHROMA_DIR) and os.listdir(CHROMA_DIR):
+            print(f"Using existing persisted Chroma at {CHROMA_DIR}")
+            return Chroma(embedding_function=OllamaEmbeddings(model=model_name), persist_directory=CHROMA_DIR)
         else:
             print("No existing persisted Chroma, building from docs now...")
             rawDocs = PullDocuments(documentPath=documentPath)
             docs = SPLITTER.split_documents(rawDocs)
-            db = Chroma.from_documents(documents=docs, embedding=OllamaEmbeddings(model=model_name), persist_directory=PERSISTENT_DIRECTORY)
+            db = Chroma.from_documents(documents=docs, embedding=OllamaEmbeddings(model=model_name), persist_directory=CHROMA_DIR)
             return db
         
 
-#def PushSession(session_name: str, history: List[Dict[str, Any]]) -> None:
+def SaveSession(session_data: Dict[str, Any], session_id: Optional[str] = None) -> str:
+    os.makedirs(SESSIONS_DIR, exist_ok=True)
+
+    #build id if not already
+    if session_id is None:
+        session_id = str(uuid4())
+    
+    #timestamp session & add relevant data
+    session_data['timestamp'] = datetime.now().isoformat()
+    session_data['session_id'] = session_id
+    
+    filename = os.path.join(SESSIONS_DIR, f"{session_id}.json")
+    
+    with open(filename, 'w') as f:
+        json.dump(session_data, f, indent=2)
+    
+    print(f"Session saved: {filename}")
+    return session_id
 
 
-#def PullSession(session_name: str) -> Dict[str, Any]:
+def PullSession(session_id: Optional[str] = None) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    if session_id is None:
+        # Return all sessions
+        sessions = []
+        if os.path.exists(SESSIONS_DIR):
+            for filename in os.listdir(SESSIONS_DIR):
+                if filename.endswith('.json'):
+                    filepath = os.path.join(SESSIONS_DIR, filename)
+                    with open(filepath, 'r') as f:
+                        sessions.append(json.load(f))
+        return sessions
+    else:
+        # Return specific session
+        filename = os.path.join(SESSIONS_DIR, f"{session_id}.json")
+        
+        if not os.path.exists(filename):
+            raise FileNotFoundError(f"Session {session_id} not found")
+        
+        with open(filename, 'r') as f:
+            return json.load(f)
 
+
+def ListSessions() -> List[str]:
+    #If no sessions found dont list anything
+    if not os.path.exists(SESSIONS_DIR):
+        return []
+    
+    sessions = []
+    for filename in os.listdir(SESSIONS_DIR):
+        if filename.endswith('.json'):
+            sessions.append(filename[:-5])  #Remove .json extension
+    
+    return sorted(sessions)

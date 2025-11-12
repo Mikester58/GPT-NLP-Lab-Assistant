@@ -11,7 +11,7 @@ from langchain_ollama import ChatOllama
 
 #pull funcs from local files
 from model import PullModel
-from database_bridge import PullDocuments
+from database_bridge import PushDocuments
 from llm import GetChatHistory
 from lightrag import LightRAG
 from config import DEFAULT_EMBEDDING_MODEL, DEFAULT_MODEL, DEFAULT_DOCS_PATH
@@ -25,7 +25,7 @@ def main(model_name: str, embedding_model: str, doc_path: str) -> None:
         sys.exit(1)
     
     try:
-        db = PullDocuments(embedding_model, doc_path)
+        db = PushDocuments(embedding_model, doc_path)
     except FileNotFoundError as e:
         print(e)
         sys.exit(1)
@@ -33,12 +33,12 @@ def main(model_name: str, embedding_model: str, doc_path: str) -> None:
     llm = ChatOllama(model=model_name)
     chat = GetChatHistory(llm, db)
 
-    lightrag = LightRAG(llm=llm, db=db, retriever_k=8)
+    lightrag = LightRAG(llm=llm, db=db)
 
     while True:
         try:
             user_input = input("\n\nPlease ask a question relating to a Lab in TAMU's ECEN 214 Lab or press 'q' to end: ").strip()
-            if user_input.lower == "q":
+            if user_input.lower() == "q":
                 break
             if user_input.lower().startswith("rag:"):
                 q = user_input[len("rag:"):].strip()
