@@ -1,4 +1,4 @@
-""""
+"""
 Retrieval augmented Generation system based on LightRAG paper:
 https://arxiv.org/abs/2410.05779
 
@@ -10,9 +10,10 @@ Enhancing retrieval via scoring, simple reranking based on relevance scoring, Ev
 generation, & overlap scoring for transparency.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from langchain_core.documents import Document
 from config import LIGHTRAG_K, LIGHTRAG_PROMPT
+
 
 class LightRAG:
     """
@@ -23,126 +24,98 @@ class LightRAG:
     - compute cheap overlap evidence scores and return structured output
     """
 
-    def __init__(self, llm, db, retriever_k: int = LIGHTRAG_K):
+    def __init__(self, llm, db, top_k: int = LIGHTRAG_K):
         self.llm = llm
-        self.db = db  #Chroma Vector
-        self.retriever_k = retriever_k
-        self.retriever = db.as_retriever(
-            search_type = "similarity_score_threshold",
-            search_kwargs = {
-                'k': retriever_k,
-                'score_threshold': 0.0 #will filter myself
-            }
-        )
+        self.db = db
+        self.top_k = top_k
     
-    def RetrieveDocs(self, query: str) -> List[tuple[Document, float]]:
-        """
-        Retrieve top K docs based on user query
-        """
-        result = self.db.similarity_search_with_relevance_scores(query, k=self.retriever_k)
-        return result
+    def retrieve(self, query: str) -> List[Tuple[Document, float]]:
+        """Retrieve documents with relevance scores"""
+        results = self.db.similarity_search_with_relevance_scores(query, k=self.top_k)
+        return results
     
-    def RerankDocs(self, scoredDocs: List[tuple[Document, float]], query:str) -> List[tuple[Document, float]]:
-        #Boost scores a little for long docs but not so much that it only prefers
+    def rerank(self, docs_with_scores: List[Tuple[Document, float]]) -> List[Tuple[Document, float]]:
+        """Rerank by adjusting scores based on document length"""
         reranked = []
-        
-        for doc, score in scoredDocs:
-            content_length = len(doc.page_content)
-            length_bonus = min(0.1, content_length / 10000 * 0.1) #Normalize
+        for doc, score in docs_with_scores:
+            length_bonus = min(0.1, len(doc.page_content) / 10000 * 0.1)
             adjusted_score = score + length_bonus
             reranked.append((doc, adjusted_score))
         
-        #sort by descending scores
         reranked.sort(key=lambda x: x[1], reverse=True)
         return reranked
     
-    def BuildEvidencePrompt(self, query: str, docs_with_scores: List[tuple[Document, float]]) -> str:
-        evidence_sections = []
+    def build_prompt(self, query: str, docs_with_scores: List[Tuple[Document, float]]) -> str:
+        """Build evidence-based prompt"""
+        evidence_parts = []
+        
         for i, (doc, score) in enumerate(docs_with_scores, 1):
             source = doc.metadata.get("source", "Unknown")
             page = doc.metadata.get("page", "?")
             content = doc.page_content
             
-            evidence_sections.append(
-                f"[Evidence {i}] (Relevance: {score:.3f})\n"
-                f"Source: {source}, Page: {page}\n"
-                f"{content}\n"
+            evidence_parts.append(
+                f"Evidence {i} (Score: {score:.3f})\n"
+                f"Source: {source}, Page {page}\n"
+                f"{content}"
             )
         
-        evidence_text = "\n---\n".join(evidence_sections)
-        prompt = f"""{LIGHTRAG_PROMPT}
-
-                ## Evidence from Lab Documents:
-                {evidence_text}
-
-                ## Student Question:
-                {query}
-
-                ## Your Answer (cite evidence numbers when relevant):
-                """
-        return prompt
+        evidence = "\n\n---\n\n".join(evidence_parts)
+        return LIGHTRAG_PROMPT.format(evidence=evidence, question=query)
     
-    def ComputeOverlapScores(self, answer: str, docs_with_scores: List[tuple[Document, float]]) -> List[Dict[str, Any]]:
-        #word based tokenization
+    def compute_overlap(self, answer: str, docs_with_scores: List[Tuple[Document, float]]) -> List[Dict[str, Any]]:
+        """Calculate word overlap between answer and evidence"""
         answer_words = set(answer.lower().split())
         
         evidence_list = []
-        
-        for i, (doc, retrieval_score) in enumerate(docs_with_scores, 1):
+        for i, (doc, score) in enumerate(docs_with_scores, 1):
             doc_words = set(doc.page_content.lower().split())
             overlap = len(answer_words & doc_words)
             total = len(answer_words | doc_words)
             overlap_score = overlap / total if total > 0 else 0
             
             evidence_list.append({
-                "evidence_id": i,
+                "id": i,
                 "source": doc.metadata.get("source", "Unknown"),
                 "page": doc.metadata.get("page", "?"),
-                "retrieval_score": retrieval_score,
-                "overlap_score": overlap_score,
-                "preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+                "retrieval_score": score,
+                "overlap_score": overlap_score
             })
         
-        #Sort overlap Score
         evidence_list.sort(key=lambda x: x["overlap_score"], reverse=True)
         return evidence_list
     
     def generate(self, query: str) -> Dict[str, Any]:
-        
-        #retrieve docs
-        docs_with_scores = self.RetrieveDocs(query)
+        """Generate answer with enhanced retrieval"""
+        print("\nRetrieving relevant documents...")
+        docs_with_scores = self.retrieve(query)
         
         if not docs_with_scores:
             return {
-                "answer": "I couldn't find any relevant information in the lab documents to answer your question.",
+                "answer": "No relevant information found in the documents.",
                 "evidence": [],
-                "docs_used": []
+                "sources": []
             }
         
-        reranked_docs = self.RerankDocs(docs_with_scores, query)
-        prompt = self.BuildEvidencePrompt(query, reranked_docs)
+        print(f"Found {len(docs_with_scores)} documents")
+        print("Reranking and generating answer...")
         
-        #Build answer
+        reranked = self.rerank(docs_with_scores)
+        prompt = self.build_prompt(query, reranked)
+        
         response = self.llm.invoke(prompt)
         answer = response.content if hasattr(response, "content") else str(response)
-        evidence = self.ComputeOverlapScores(answer, reranked_docs)
         
-        #Prep Docs List
-        docs_used = [
-            {
-                "source": doc.metadata.get("source", "Unknown"),
-                "page": doc.metadata.get("page", "?"),
-                "score": score
-            }
-            for doc, score in reranked_docs
+        print("Computing evidence contributions...")
+        evidence = self.compute_overlap(answer, reranked)
+        
+        sources = [
+            f"{doc.metadata.get('source', 'Unknown')} (Page {doc.metadata.get('page', '?')})"
+            for doc, _ in reranked
         ]
         
         return {
             "answer": answer,
             "evidence": evidence,
-            "docs_used": docs_used
+            "sources": sources
         }
-
-    def query(self, question: str) -> str:
-        result = self.generate(question)
-        return result["answer"]

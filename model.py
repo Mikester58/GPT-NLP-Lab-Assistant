@@ -1,6 +1,7 @@
 """
 File to maintain the model and ensure functionality of ollama integration.
 Provides:
+- CheckLocalAvailability(modelName) -> bool
 - CheckModelAvailability(modelName) -> bool
 - GetListOfModels() -> list[str]
 - PullModel(modelName) -> bool
@@ -49,12 +50,16 @@ def GetListOfModels() -> List[str]:
     try:
         response = ollama.list()
         models = response.get("models", [])
-        return [m.get("model") for m in models if isinstance(m, dict) and "model" in m]
-    except Exception:
+        model_list = []
+        for m in models:
+            if isinstance(m, dict) and "model" in m:
+                model_list.append(m.get("model"))
+        return model_list
+    except Exception as e:
         return []
 
 
-def PullModel(modelName: str) -> None:
+def PullModel(modelName: str) -> bool:
     """
     Attempt to pull modelName from Ollama hub.
     Stream progress and returns True or False depending on success.
@@ -66,40 +71,34 @@ def PullModel(modelName: str) -> None:
         for progress in ollama.pull(modelName, stream=True):
             digest = progress.get("digest", "")
             
-            #If bar changes close the digest
             if digest != currDigest and currDigest in bars:
-                try:
-                    bars[currDigest].close()
-                except Exception:
-                    pass
+                bars[currDigest].close()
             
-            #clean status text
             if not digest:
                 status = progress.get("status")
                 if status:
                     print(status)
                 continue
             
-            #make new tqdm bar if required
             if digest not in bars and (total := progress.get("total")):
-                bars[digest] = tqdm(total=total, desc=f"pulling {digest[7:19]}", unit="B", unit_scale=True)
+                bars[digest] = tqdm(
+                    total=total, 
+                    desc=f"Pulling {digest[7:19]}", 
+                    unit="B", 
+                    unit_scale=True
+                )
             
             if completed := progress.get("completed"):
-                try:
-                    bars[digest].update(completed - bars[digest].n)
-                except Exception:
-                    #if out of sync ignore it & continue
-                    pass
+                bars[digest].update(completed - bars[digest].n)
             
             currDigest = digest
 
         for bar in bars.values():
-            try:
-                bar.close()
-            except Exception:
-                pass
-        print(f"Successfully pulled model {modelName}!")
+            bar.close()
+
+        print(f"Successfully pulled {modelName}")
         return True
+        
     except Exception as e:
-        print(f"Failed to pull model {modelName}: {e}")
+        print(f"Failed to pull {modelName}: {e}")
         return False
