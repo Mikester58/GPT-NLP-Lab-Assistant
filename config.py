@@ -14,7 +14,7 @@ DEFAULT_DOC_PROMPT = PromptTemplate.from_template(
 )
 
 #For standard RAG
-ANSWER_PROMPT = """You are a helpful lab assistant for ECEN 214.
+ANSWER_PROMPT = """You are a helpful lab assistant for  Electrical Engineering labs.
 Use the context below to answer the question accurately.
 If you cannot answer based on the context, say so.
 
@@ -26,8 +26,9 @@ Question: {question}
 Answer:"""
 
 #LightRAG vectorization requests a different type of prompting
-LIGHTRAG_PROMPT = """You are a lab assistant for ECEN 214.
+LIGHTRAG_PROMPT = """You are a lab assistant for Electrical Engineering labs.
 Analyze the evidence below and provide a comprehensive answer.
+If there are any equations in the answer please state them in the form which they appear.
 Reference evidence numbers when relevant (e.g., "According to Evidence 1...").
 
 {evidence}

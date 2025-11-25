@@ -19,5 +19,5 @@ This project combines two seperate approaches for this custom localLLM + LightRA
 
 # Prerequisires
 1. Ollama from Meta: https://ollama.ai/
-2. Python 3.9+ for all dependencies (found on pythons website)
+2. Python 3.13+ for all dependencies (found on pythons website)
 3. Imports from requirements.txt (Please run 'pip install -r requirements.txt')

@@ -18,7 +18,7 @@ def CheckLocalAvailability(modelName: str) -> bool:
     try:
         ollama.show(model=modelName)
         return True
-    except (ollama.ResponseError, Exception):
+    except Exception:
         return False
         
 def CheckModelAvailability(modelName: str) -> bool:
@@ -39,6 +39,7 @@ def CheckModelAvailability(modelName: str) -> bool:
     if pulled and CheckLocalAvailability(modelName):
         return True
     
+    print(f"Failed to get model {modelName}")
     return False
     
 
@@ -50,14 +51,18 @@ def GetListOfModels() -> List[str]:
     try:
         response = ollama.list()
         models = response.get("models", [])
-        model_list = []
+        
+        model_names = []
         for m in models:
-            if isinstance(m, dict) and "model" in m:
-                model_list.append(m.get("model"))
-        return model_list
+            if "name" in m:
+                model_names.append(m["name"])
+            elif "model" in m:
+                model_names.append(m["model"])
+        
+        return model_names
     except Exception as e:
+        print(f"Error getting models: {e}")
         return []
-
 
 def PullModel(modelName: str) -> bool:
     """
