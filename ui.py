@@ -1,6 +1,6 @@
 """
-Streamlit UI for ECEN 214 Lab Assistant
-Simple interface for local Jetson operation
+Streamlit UI for lab assistant demo
+run using python -m streamlit run ui.py
 """
 
 import streamlit as st
