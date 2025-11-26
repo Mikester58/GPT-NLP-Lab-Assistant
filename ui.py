@@ -81,7 +81,7 @@ with st.sidebar:
     st.divider()
     
     # Mode
-    query_mode = st.radio("Mode", ["Normal", "Enhanced"])
+    query_mode = st.radio("Mode", ["Normal", "Enhanced"]) #Add mode to run model WITHOUT rag
     
     st.divider()
     
@@ -207,7 +207,6 @@ else:
                             st.text(s)
                 
                 else:
-                    # Use LightRAG class
                     if "lightrag" not in st.session_state:
                         st.session_state.lightrag = LightRAG(
                             st.session_state.llm,

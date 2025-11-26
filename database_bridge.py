@@ -14,6 +14,7 @@ Provides:
 
 import os
 import json
+import subprocess
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from uuid import uuid4
@@ -63,27 +64,36 @@ def LoadDocuments(path: str) -> List[Document]:
     return docs
 
 
+def kill_ollama(model: str):
+    """Stop the Ollama instance for the given model."""
+    try:
+        subprocess.run(["ollama", "stop", model], check=False)
+        print(f"Ollama model '{model}' stopped.")
+    except Exception as e:
+        print(f"Warning: Failed to stop Ollama: {e}")
+
 def InitializeDatabase(embedding_model: str, docs_path: str, force_reload: bool = False) -> Chroma:
-    """Initialize or load vector database"""
+    """Initialize or load the Chroma vector database, then shut down Ollama."""
+    
     os.makedirs(STORAGE_DIR, exist_ok=True)
     os.makedirs(CHROMA_DIR, exist_ok=True)
-    
-    embeddings = OllamaEmbeddings(model=embedding_model)
-    
-    # Check if database exists
+
     db_exists = os.path.isdir(CHROMA_DIR) and len(os.listdir(CHROMA_DIR)) > 0
-    
-    if force_reload:
-        print("Force reload: Building vector database from documents...")
-        
+
+    # Always instantiate embeddings once
+    embeddings = OllamaEmbeddings(model=embedding_model)
+
+    def build_database():
+        print("Building vector database from documents...")
+
         raw_docs = LoadDocuments(docs_path)
         if not raw_docs:
             raise ValueError(f"No documents found in {docs_path}")
-        
+
         chunks = SPLITTER.split_documents(raw_docs)
-        print(f"Created {len(chunks)} text chunks")
+        print(f"Created {len(chunks)} chunks")
         print("Generating embeddings...")
-        
+
         db = Chroma.from_documents(
             documents=chunks,
             embedding=embeddings,
@@ -91,8 +101,14 @@ def InitializeDatabase(embedding_model: str, docs_path: str, force_reload: bool 
         )
         print("Database created and saved")
         return db
-    
-    elif db_exists:
+
+    if force_reload:
+        print("Force reload requested – rebuilding database.")
+        db = build_database()
+        kill_ollama(embedding_model)
+        return db
+
+    if db_exists:
         print(f"Loading existing database from {CHROMA_DIR}")
         try:
             db = Chroma(
@@ -100,27 +116,14 @@ def InitializeDatabase(embedding_model: str, docs_path: str, force_reload: bool 
                 persist_directory=CHROMA_DIR
             )
             print("Database loaded successfully")
+            kill_ollama(embedding_model)
             return db
         except Exception as e:
             print(f"Error loading existing database: {e}")
-            print("Rebuilding database...")
-    
-    # No database exists or failed to load, build new one
-    print("Building new vector database from documents...")
-    raw_docs = LoadDocuments(docs_path)
-    if not raw_docs:
-        raise ValueError(f"No documents found in {docs_path}")
-    
-    chunks = SPLITTER.split_documents(raw_docs)
-    print(f"Created {len(chunks)} text chunks")
-    print("Generating embeddings...")
-    
-    db = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory=CHROMA_DIR
-    )
-    print("Database created and saved")
+            print("Falling back to rebuild...")
+
+    db = build_database()
+    kill_ollama(embedding_model)
     return db
 
 def SaveSession(session_data: Dict[str, Any], session_id: Optional[str] = None) -> str:
