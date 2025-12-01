@@ -94,7 +94,7 @@ with st.sidebar:
     st.divider()
     
     # Mode
-    query_mode = st.radio("Mode", ["Normal", "Enhanced"])
+    query_mode = st.radio("Retrieval Augmentation Mode", ["Normal", "Enhanced"])
     
     st.divider()
     

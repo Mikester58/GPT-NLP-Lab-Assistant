@@ -14,7 +14,7 @@ DEFAULT_DOC_PROMPT = PromptTemplate.from_template(
 )
 
 #For standard RAG
-ANSWER_PROMPT = """You are a helpful lab assistant for  Electrical Engineering labs.
+ANSWER_PROMPT = """You are a helpful lab assistant for Electrical Engineering labs.
 Use the context below to answer the question accurately.
 If you cannot answer based on the context, say so.
 
@@ -54,7 +54,7 @@ DEFAULT_MODEL = "llama3.2:1b"  # Use Llama3.2 3B model per Vishuam, ensure the p
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
 
 #Make sure these always align with folders in local/remote DB
-DEFAULT_DOCS_PATH = "Docs"
+DEFAULT_DOCS_PATH = "ECEN_214_Docs"
 STORAGE_DIR = "storage"
 CHROMA_DIR = "storage/chroma"
 SESSIONS_DIR = "storage/sessions"
