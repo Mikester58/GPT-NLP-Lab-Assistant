@@ -15,6 +15,7 @@ Provides:
 import os
 import json
 import subprocess
+import gc
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from uuid import uuid4
@@ -25,10 +26,25 @@ from langchain_core.prompts import format_document
 from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+import torch
 
 from config import DEFAULT_DOC_PROMPT, CHUNK_SIZE, CHUNK_OVERLAP, CHROMA_DIR, STORAGE_DIR, SESSIONS_DIR
 
 SPLITTER = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
+
+def ClearCudaCache():
+    """Clear CUDA cache to free GPU memory"""
+    try:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            print("CUDA cache cleared")
+    except ImportError:
+        pass
+    
+    # Force garbage collection
+    gc.collect()
+    print("Garbage collection completed")
 
 def CombineDocuments(docs: List[Document]) -> str:
     """Combine documents into single string for context"""
@@ -133,16 +149,19 @@ def SaveSession(session_data: Dict[str, Any], session_id: Optional[str] = None) 
     if session_id is None:
         session_id = str(uuid4())
     
+    filename_id = session_id
+    
     session_data['timestamp'] = datetime.now().isoformat()
     session_data['session_id'] = session_id
     
-    filename = os.path.join(SESSIONS_DIR, f"{session_id}.json")
+    filepath = os.path.join(SESSIONS_DIR, f"{filename_id}.json")
     
-    with open(filename, 'w') as f:
+    # Write session (overwrites previous if exists)
+    with open(filepath, 'w') as f:
         json.dump(session_data, f, indent=2)
     
-    print(f"Session saved: {filename}")
-    return session_id
+    print(f"Session saved: {filepath}")
+    return filename_id
 
 
 def LoadSession(session_id: str) -> Dict[str, Any]:

@@ -6,8 +6,8 @@ import streamlit as st
 import os
 from langchain_ollama import ChatOllama
 
-from database_bridge import InitializeDatabase, SaveSession, ListSessions, CombineDocuments
-from llm import GetSession, BuildChain, ClearSession
+from database_bridge import InitializeDatabase, SaveSession, ListSessions, LoadSession, ClearCudaCache, CombineDocuments
+from llm import GetSession, ClearSession
 from lightrag import LightRAG
 from model import GetListOfModels
 from config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DOCS_PATH, DEFAULT_MODEL, CHROMA_DIR, ANSWER_PROMPT, RETRIEVER_K
@@ -16,6 +16,10 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
+import streamlit as st
+import os
+from langchain_ollama import ChatOllama
 
 st.title("AURA")
 
@@ -25,14 +29,19 @@ st.set_page_config(page_title="AURA", layout="centered")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "query_count" not in st.session_state:
+    st.session_state.query_count = 0
+
 if "db" not in st.session_state:
     if os.path.isdir(CHROMA_DIR) and os.listdir(CHROMA_DIR):
         try:
-            st.session_state.db = InitializeDatabase(
-                DEFAULT_EMBEDDING_MODEL,
-                DEFAULT_DOCS_PATH,
-                force_reload=False
-            )
+            with st.spinner("Loading database..."):
+                st.session_state.db = InitializeDatabase(
+                    DEFAULT_EMBEDDING_MODEL,
+                    DEFAULT_DOCS_PATH,
+                    force_reload=False
+                )
+                st.success("Database loaded - embedding model unloaded")
         except:
             st.session_state.db = None
     else:
@@ -41,6 +50,9 @@ if "db" not in st.session_state:
 if "llm" not in st.session_state:
     st.session_state.llm = ChatOllama(model=DEFAULT_MODEL)
     st.session_state.current_model = DEFAULT_MODEL
+
+if "current_session_id" not in st.session_state:
+    st.session_state.current_session_id = "main"
 
 # Sidebar
 with st.sidebar:
@@ -67,12 +79,13 @@ with st.sidebar:
         if os.path.isdir(docs_path):
             with st.spinner("Indexing..."):
                 try:
+                    ClearCudaCache()
                     st.session_state.db = InitializeDatabase(
                         DEFAULT_EMBEDDING_MODEL, 
                         docs_path,
                         force_reload=True
                     )
-                    st.success("Indexed")
+                    st.success("Indexed - embedding model unloaded")
                 except Exception as e:
                     st.error(str(e))
         else:
@@ -81,51 +94,77 @@ with st.sidebar:
     st.divider()
     
     # Mode
-    query_mode = st.radio("Mode", ["Normal", "Enhanced"]) #Add mode to run model WITHOUT rag
+    query_mode = st.radio("Mode", ["Normal", "Enhanced"])
     
     st.divider()
     
     # Session management
-    session_id = st.text_input("Session ID", "main")
+    st.subheader("Session")
     
-    # Show existing sessions
-    saved_sessions = ListSessions()
-    if saved_sessions:
-        with st.expander(f"Saved Sessions ({len(saved_sessions)})"):
-            for sess in saved_sessions:
-                st.text(sess)
+    session_id = st.text_input("Session ID", st.session_state.current_session_id)
+    
+    if session_id != st.session_state.current_session_id:
+        st.session_state.current_session_id = session_id
+        st.session_state.messages = []
     
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("Clear"):
+        if st.button("Clear", use_container_width=True):
             ClearSession(session_id)
             st.session_state.messages = []
             st.rerun()
     
     with col2:
-        if st.button("Save"):
-            try:
-                session = GetSession(session_id)
-                messages = session.messages
-                
-                if messages:
-                    session_data = {
-                        "messages": [
-                            {
-                                "role": getattr(msg, "type", "unknown"),
-                                "content": getattr(msg, "content", "")
-                            }
-                            for msg in messages
-                        ]
-                    }
+        # Load session button
+        saved_sessions = ListSessions()
+        if saved_sessions:
+            if st.button("Load", use_container_width=True):
+                st.session_state.show_load_dialog = True
+    
+    # Manual cache clear button
+    if st.button("Clear GPU Cache", use_container_width=True):
+        ClearCudaCache()
+        st.success("Cache cleared")
+    
+    # Show load dialog
+    if st.session_state.get("show_load_dialog") and saved_sessions:
+        st.subheader("Load Session")
+        for sess_id in saved_sessions:
+            if st.button(sess_id, key=f"load_{sess_id}", use_container_width=True):
+                try:
+                    loaded_data = LoadSession(sess_id)
+                    st.session_state.current_session_id = sess_id
                     
-                    saved_id = SaveSession(session_data, session_id)
-                    st.success(f"Saved: {saved_id}")
-                else:
-                    st.warning("No messages")
-            except Exception as e:
-                st.error(str(e))
+                    # Clear current session
+                    ClearSession(sess_id)
+                    
+                    # Reload messages into session
+                    session = GetSession(sess_id)
+                    for msg in loaded_data.get("messages", []):
+                        if msg["role"] == "user" or msg["role"] == "human":
+                            session.add_message(HumanMessage(content=msg["content"]))
+                        else:
+                            session.add_message(AIMessage(content=msg["content"]))
+                    
+                    # Update UI messages
+                    st.session_state.messages = []
+                    for msg in loaded_data.get("messages", []):
+                        st.session_state.messages.append({
+                            "role": "user" if msg["role"] in ["user", "human"] else "assistant",
+                            "content": msg["content"],
+                            "sources": []
+                        })
+                    
+                    st.session_state.show_load_dialog = False
+                    st.success(f"Loaded {sess_id}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Load error: {str(e)}")
+        
+        if st.button("Cancel", use_container_width=True):
+            st.session_state.show_load_dialog = False
+            st.rerun()
 
 # Main chat
 if st.session_state.db is None:
@@ -135,13 +174,20 @@ else:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
-            if "sources" in msg:
+            if "sources" in msg and msg["sources"]:
                 with st.expander("Sources"):
                     for s in msg["sources"]:
                         st.text(s)
     
     # Input
     if prompt := st.chat_input("Ask a question"):
+        session_id = st.session_state.current_session_id
+        
+        # Auto-clear cache every 5 queries
+        st.session_state.query_count += 1
+        if st.session_state.query_count % 5 == 0:
+            ClearCudaCache()
+        
         st.session_state.messages.append({"role": "user", "content": prompt})
         
         with st.chat_message("user"):
@@ -234,6 +280,9 @@ else:
                     "sources": sources
                 })
                 
+                # Force save after adding message to state
+                st.rerun()
+                
             except Exception as e:
                 st.error(str(e))
                 response_text = "Error occurred"
@@ -242,3 +291,31 @@ else:
                     "content": response_text,
                     "sources": []
                 })
+
+# Auto-save logic runs after rerun, outside the input block
+if st.session_state.get("messages") and len(st.session_state.messages) > 0:
+    try:
+        session_id = st.session_state.current_session_id
+        session = GetSession(session_id)
+        
+        # Get messages from LangChain session
+        lc_messages = session.messages
+        
+        # Build save data from UI messages (more reliable)
+        session_data = {"messages": []}
+        
+        for msg in st.session_state.messages:
+            if msg["role"] in ["user", "assistant"]:
+                session_data["messages"].append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+        
+        # Only save if we have messages
+        if session_data["messages"]:
+            saved_id = SaveSession(session_data, session_id)
+            # Don't display anything to avoid clutter
+            
+    except Exception as e:
+        # Silent fail for auto-save
+        pass
