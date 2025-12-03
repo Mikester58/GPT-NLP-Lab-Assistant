@@ -1,0 +1,14 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is Ohms law?"
+    },
+    {
+      "role": "assistant",
+      "content": "The voltage is directly proportional to the current in a resistor.\n\nV = I*R\n\nWhere:\n\n* V is the voltage measured in Volts (V)\n* I is the current measured in Amps (A)\n* R is the resistance measured in Ohms (\u2126)"
+    }
+  ],
+  "timestamp": "2025-12-02T16:27:55.158338",
+  "session_id": "hghghg"
+}

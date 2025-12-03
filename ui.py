@@ -2,15 +2,19 @@
 Streamlit UI for lab assistant demo
 run using python -m streamlit run ui.py
 """
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=".env", override=True)
+
 import streamlit as st
 import os
 from langchain_ollama import ChatOllama
+from langsmith import traceable
 
 from database_bridge import InitializeDatabase, SaveSession, ListSessions, LoadSession, ClearCudaCache, CombineDocuments
 from llm import GetSession, ClearSession
 from lightrag import LightRAG
 from model import GetListOfModels
-from config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DOCS_PATH, DEFAULT_MODEL, CHROMA_DIR, ANSWER_PROMPT, RETRIEVER_K
+from config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DOCS_PATH, DEFAULT_MODEL, CHROMA_DIR, ANSWER_PROMPT, RETRIEVER_K, LLM_TEMPERATURE, LLM_TOP_P, LLM_MAX_TOKENS
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
@@ -19,7 +23,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
 import streamlit as st
 import os
-from langchain_ollama import ChatOllama
 
 st.title("AURA")
 
@@ -48,7 +51,12 @@ if "db" not in st.session_state:
         st.session_state.db = None
 
 if "llm" not in st.session_state:
-    st.session_state.llm = ChatOllama(model=DEFAULT_MODEL)
+    st.session_state.llm = ChatOllama(
+            model=DEFAULT_MODEL,
+            temperature=LLM_TEMPERATURE,
+            top_p=LLM_TOP_P,
+            num_predict=LLM_MAX_TOKENS
+        )
     st.session_state.current_model = DEFAULT_MODEL
 
 if "current_session_id" not in st.session_state:
@@ -68,7 +76,12 @@ with st.sidebar:
     
     if st.session_state.get("current_model") != selected_model:
         st.session_state.current_model = selected_model
-        st.session_state.llm = ChatOllama(model=selected_model)
+        st.session_state.llm = ChatOllama(
+            model=selected_model,
+            temperature=LLM_TEMPERATURE,
+            top_p=LLM_TOP_P,
+            num_predict=LLM_MAX_TOKENS
+        )
     
     st.divider()
     
@@ -181,6 +194,11 @@ else:
     
     # Input
     if prompt := st.chat_input("Ask a question"):
+        @traceable(name="handle_user_message")
+        def process_message(prompt, session_id, query_mode):
+            return prompt, session_id, query_mode
+        
+        prompt, session_id, query_mode = process_message(prompt, session_id, query_mode)
         session_id = st.session_state.current_session_id
         
         # Auto-clear cache every 5 queries
@@ -209,10 +227,21 @@ else:
                         ("human", "{question}")
                     ])
                     
+                    @traceable(name="retrieve_documents")
                     def get_context(q):
                         docs = retriever.invoke(q)
                         return CombineDocuments(docs)
                     
+                    @traceable(name="rag_chain_run")
+                    def run_rag_chain(chain_with_history, question, session_id):
+                        response_text = ""
+                        for chunk in chain_with_history.stream(
+                            {"question": question},
+                            config={"configurable": {"session_id": session_id}}
+                        ):
+                            response_text += chunk if isinstance(chunk, str) else chunk
+                            yield response_text
+
                     chain = (
                         RunnablePassthrough.assign(
                             context=lambda x: get_context(x["question"])
@@ -228,18 +257,12 @@ else:
                         input_messages_key="question",
                         history_messages_key="history"
                     )
-                    
-                    response_text = ""
+
                     placeholder = st.empty()
-                    
-                    for chunk in chain_with_history.stream(
-                        {"question": prompt},
-                        config={"configurable": {"session_id": session_id}}
-                    ):
-                        if isinstance(chunk, str):
-                            response_text += chunk
-                        else:
-                            response_text += chunk
+
+                    response_text = ""
+                    for partial in run_rag_chain(chain_with_history, prompt, session_id):
+                        response_text = partial
                         placeholder.write(response_text)
                     
                     docs = retriever.invoke(prompt)
@@ -259,7 +282,11 @@ else:
                             st.session_state.db
                         )
                     
-                    result = st.session_state.lightrag.generate(prompt)
+                    @traceable(name="lightrag_generate")
+                    def traced_lightrag(prompt):
+                        return st.session_state.lightrag.generate(prompt)
+
+                    result = traced_lightrag(prompt)
                     response_text = result["answer"]
                     
                     st.write(response_text)

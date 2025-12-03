@@ -1,0 +1,30 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is Ohms law?"
+    },
+    {
+      "role": "assistant",
+      "content": "Ohm's Law states that there is a linear relationship between voltage and current in a resistor. It describes how much voltage will be dropped across a resistor when a certain amount of current flows through it.\n\nMathematically, this can be expressed as:\n\nV = I \u00d7 R\n\nWhere V is the voltage, I is the current, and R is the resistance.\n\nThis law applies to all devices that impede the flow of current, including resistors."
+    },
+    {
+      "role": "user",
+      "content": "What is the purpose of lab 1?"
+    },
+    {
+      "role": "assistant",
+      "content": "The purpose of Lab 1 (Introduction to Electrical Measurements) is to become familiar with how to make common electrical measurements using a digital multimeter (DMM)."
+    },
+    {
+      "role": "user",
+      "content": "What are Kirchoffs laws?"
+    },
+    {
+      "role": "assistant",
+      "content": "Kirchoff's Laws state that the sum of all voltage drops around a closed loop in a circuit must be equal to zero (KVL), and the sum of all currents entering any node in a circuit must be equal to the sum of all currents leaving that same node (KCL)."
+    }
+  ],
+  "timestamp": "2025-12-02T13:50:00.002386",
+  "session_id": "Test11"
+}

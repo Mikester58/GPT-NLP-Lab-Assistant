@@ -1,0 +1,30 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is Ohms law?"
+    },
+    {
+      "role": "assistant",
+      "content": "Ohm's Law describes a linear relationship between the voltage and current in a resistor."
+    },
+    {
+      "role": "user",
+      "content": "What is Ohms law?"
+    },
+    {
+      "role": "assistant",
+      "content": "Ohm's Law describes a linear relationship between the voltage and current in a resistor."
+    },
+    {
+      "role": "user",
+      "content": "What is the formula for ohms law?"
+    },
+    {
+      "role": "assistant",
+      "content": "The direct answer to the question based on the evidence provided is:\n\nOhm's Law\nOhm's law describes a linear relationship between the current and voltage in a resistor.\n\ud835\udc49\ud835\udc49\n\ud835\udc3c\ud835\udc3c\n\ud835\udc45\ud835\udc45\nSmall resistance \uf0e0    larger currents, \nsmaller voltages.\n\ud835\udc49\ud835\udc49\n\ud835\udc3c\ud835\udc3c\n\ud835\udc45\ud835\udc45\nLarge resistance \uf0e0    smaller currents, \nlarger voltages."
+    }
+  ],
+  "timestamp": "2025-12-01T16:48:57.714537",
+  "session_id": "test3"
+}
